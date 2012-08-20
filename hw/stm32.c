@@ -54,7 +54,7 @@ static void ssys_reset (void *opaque) {
 static uint64_t ssys_read (void *opaque, target_phys_addr_t offset, 
                                                     unsigned size)
 {
-    // nothing to do
+    /* nothing to do */
     return 0;
 }
 
@@ -78,7 +78,7 @@ static const MemoryRegionOps ssys_ops = {
 
 static int stm32_sys_post_load (void *opaque, int version_id)
 {
-    //Nothing to do
+    /* Nothing to do */
     return 0;
 }
 
@@ -100,7 +100,7 @@ static const VMStateDescription vmstate_stm32_sys = {
 
 
 static int stm32l_sys_init (uint32_t base, qemu_irq irq,
-           stm32_board_info * board)
+           stm32_board_info *board)
 {
     ssys_state *s;
 
