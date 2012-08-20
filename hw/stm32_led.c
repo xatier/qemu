@@ -27,9 +27,8 @@ static void stm32_led_reset (stm32_led_state *s)
     s->ledState = 0;
 }
 
-/*
- * Appelé quand une entrée de led reçoit une IT
- */
+
+
 static void stm32_led_recvirq (void *opaque, int num_pin, int level)
 {
     /* the LED change state */
@@ -51,7 +50,9 @@ static int stm32_led_init (SysBusDevice *dev, const char *id)
     qdev_init_gpio_in(&dev->qdev, stm32_led_recvirq, 1);
 
     /* initialize the char device */
-    s->chr = qemu_chr_find(id);
+    char id_string[20];
+    sprintf(id_string, "led_%s", id);
+    s->chr = qemu_chr_find(id_string);
     
     stm32_led_reset(s);
     vmstate_register(&dev->qdev, -1, &vmstate_stm32_led, s);
@@ -63,14 +64,14 @@ static int stm32_led_init (SysBusDevice *dev, const char *id)
 
 static int stm32_led_init_Blue (SysBusDevice *dev)
 {
-    return stm32_led_init(dev, "led_blue");
+    return stm32_led_init(dev, "blue");
 }
 
 
 
 static int stm32_led_init_Green(SysBusDevice *dev)
 {
-    return stm32_led_init(dev, "led_green");
+    return stm32_led_init(dev, "green");
 }
 
 

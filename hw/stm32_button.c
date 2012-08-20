@@ -34,37 +34,34 @@ static int stm32_can_receive (void *opaque) { return 1; } /* always return 1 */
 
 
 
-static void stm32_receive(void *opaque, const uint8_t* buf, int size)
+static void stm32_receive (void *opaque, const uint8_t *buf, int size)
 {
 
     stm32_button_state *s = (stm32_button_state *) opaque;
     
     int i = 0;
     for(i = 0; i < size; i++) {
-        //Leve une IRQ
-        uint8_t etat   = buf[i];
-        s->buttonState = etat;
-        printf("the BUTTON change state->%d\n", (int)etat);
-        qemu_set_irq(s->gpio_out, (int)etat);
+        uint8_t state   = buf[i];
+        s->buttonState  = state;
+        qemu_set_irq(s->gpio_out, (int)state);
     }
 }
 
 
 
-static void stm32_event(void *opaque, int event) { } // NOT USED
+static void stm32_event (void *opaque, int event) { }    /* NOT USED */
 
 
 
-static int stm32_button_init(SysBusDevice *dev, const char* id)
+static int stm32_button_init (SysBusDevice *dev, const char* id)
 {
     stm32_button_state *s = FROM_SYSBUS(stm32_button_state, dev);
     
-    // initial the output pins
+    /* initialize the output pins */
     qdev_init_gpio_out(&dev->qdev, &s->gpio_out, 1);
     
-    // inital the char dev
+    /* initalize the char dev */
     s->chr = qemu_char_get_next_serial();
-    //s->id  = id;
 
     if (s->chr) {
         qemu_chr_add_handlers(s->chr, stm32_can_receive, stm32_receive, stm32_event, s);
@@ -78,7 +75,7 @@ static int stm32_button_init(SysBusDevice *dev, const char* id)
 
 
 
-static int stm32_button_init_(SysBusDevice *dev)
+static int stm32_button_init_ (SysBusDevice *dev)
 {
     return stm32_button_init(dev, "user0");
 }
@@ -115,7 +112,7 @@ static TypeInfo stm32_button_info = {
 
 
 
-static void stm32_button_register_devices(void) {
+static void stm32_button_register_devices (void) {
     type_register_static(&stm32_button_info);
 }
 
