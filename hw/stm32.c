@@ -154,7 +154,6 @@ static void stm32l152rbt6_init (ram_addr_t ram_size, const char *boot_device,
     DeviceState* led_dev6 = sysbus_create_simple("stm32_led_blue" , -1, NULL);
     DeviceState* led_dev7 = sysbus_create_simple("stm32_led_green", -1, NULL);
     
-    
     /* initialize GPIO_A */
     gpio_dev[GPIO_A] = sysbus_create_varargs("stm32_gpio_A", gpio_addr[GPIO_A],
                                                                         NULL);
