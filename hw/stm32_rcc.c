@@ -1,5 +1,6 @@
 #include "sysbus.h"
 #include "qemu-timer.h"
+#include "sysemu.h"
 
 typedef struct {
     SysBusDevice busdev;
@@ -20,6 +21,7 @@ typedef struct {
     qemu_irq irq;
     unsigned char *id;
     MemoryRegion iomem;
+    QEMUTimer *timer;
     uint32_t tick_offset;
     uint32_t tick_offset_vmstate;
 
@@ -27,38 +29,39 @@ typedef struct {
 
 
 
-static const VMStateDescription vmstate_stm32_rcc = {
-    .name = "stm32_rcc",
-    .version_id = 2,
-    .minimum_version_id = 1,
-    .fields = (VMStateField[])
-    {
-        VMSTATE_UINT32(CR, stm32_rcc_state),
-        VMSTATE_UINT32(ICSCR, stm32_rcc_state),
-        VMSTATE_UINT32(CFGR, stm32_rcc_state),
-        VMSTATE_UINT32(CIR, stm32_rcc_state),
-        VMSTATE_UINT32(AHBRSTR, stm32_rcc_state),
-        VMSTATE_UINT32(APB2RSTR, stm32_rcc_state),
-        VMSTATE_UINT32(APB1RSTR, stm32_rcc_state),
-        VMSTATE_UINT32(AHBENR, stm32_rcc_state),
-        VMSTATE_UINT32(APB2ENR, stm32_rcc_state),
-        VMSTATE_UINT32(APB1ENR, stm32_rcc_state),
-        VMSTATE_UINT32(AHBLPENR, stm32_rcc_state),
-        VMSTATE_UINT32(APB2LPENR, stm32_rcc_state),
-        VMSTATE_UINT32(APB1LPENR, stm32_rcc_state),
-        VMSTATE_UINT32(CSR, stm32_rcc_state),
-        VMSTATE_UINT32(tick_offset_vmstate, stm32_rcc_state),
-        VMSTATE_END_OF_LIST()
-    }
-};
-
-
-
 static void stm32_rcc_update (stm32_rcc_state *s) {
-    /* FIXME: Implement interrupts.  */
+    qemu_set_irq(s->irq, s->CIR);
 }
 
 
+static void stm32_rcc_interrupt(void * opaque)
+{
+    stm32_rcc_state *s = (stm32_rcc_state *)opaque;
+
+    s->CIR = 1;
+    stm32_rcc_update(s);
+}
+
+
+static uint32_t stm32_rcc_get_count(stm32_rcc_state *s)
+{
+    int64_t now = qemu_get_clock_ns(rtc_clock);
+    return s->tick_offset + now / get_ticks_per_sec();
+}
+
+static void stm32_rcc_set_alarm(stm32_rcc_state *s)
+{
+    uint32_t ticks;
+    ticks = s->ICSCR- stm32_rcc_get_count(s);
+    if (ticks == 0) {
+        qemu_del_timer(s->timer);
+        s->CIR = 1;
+        qemu_set_irq(s->irq, s->CIR);
+    } else {
+        int64_t now = qemu_get_clock_ns(rtc_clock);
+        qemu_mod_timer(s->timer, now + (int64_t)ticks * get_ticks_per_sec());
+    }
+}
 
 static uint64_t stm32_rcc_read (void *opaque, target_phys_addr_t offset, 
     unsigned size) {
@@ -208,19 +211,58 @@ static int stm32_rcc_init (SysBusDevice *dev) {
 
     sysbus_init_irq(dev, &s->irq);
     qemu_get_timedate(&tm, 0);
-    s->tick_offset = mktimegm(&tm) - qemu_get_time_ns(rtc_clock) / get_ticj_per_sec();
-    s->timer = qemu_new_timer_ns(rtc_clock, s);
+    s->tick_offset = mktimegm(&tm) - qemu_get_clock_ns(rtc_clock) / get_ticks_per_sec();
+    s->timer = qemu_new_timer_ns(rtc_clock, stm32_rcc_interrupt, s);
     stm32_rcc_reset(s);
     return 0;
 }
 
 
+static void stm32_rcc_pre_save(void *opaque)
+{
+    stm32_rcc_state *s = opaque;
 
-static Property stm32_rcc_sysbus_properties[] = {
-    // nothing
-    DEFINE_PROP_END_OF_LIST(),
+    s->tick_offset_vmstate = s->tick_offset + 
+        (qemu_get_clock_ns(rtc_clock) - qemu_get_clock_ns(vm_clock)) / get_ticks_per_sec();
+}
+
+static int stm32_rcc_post_load(void *opaque, int version_id)
+{
+    stm32_rcc_state *s = opaque;
+
+    s->tick_offset_vmstate = s->tick_offset + 
+        (qemu_get_clock_ns(rtc_clock) - qemu_get_clock_ns(vm_clock)) / get_ticks_per_sec();
+    stm32_rcc_set_alarm(s);
+    return 0;
+}
+
+
+static const VMStateDescription vmstate_stm32_rcc = {
+    .name = "stm32_rcc",
+    .version_id = 2,
+    .minimum_version_id = 1,
+    .pre_save = stm32_rcc_pre_save,
+    .post_load = stm32_rcc_post_load,
+    .fields = (VMStateField[])
+    {
+        VMSTATE_UINT32(CR, stm32_rcc_state),
+        VMSTATE_UINT32(ICSCR, stm32_rcc_state),
+        VMSTATE_UINT32(CFGR, stm32_rcc_state),
+        VMSTATE_UINT32(CIR, stm32_rcc_state),
+        VMSTATE_UINT32(AHBRSTR, stm32_rcc_state),
+        VMSTATE_UINT32(APB2RSTR, stm32_rcc_state),
+        VMSTATE_UINT32(APB1RSTR, stm32_rcc_state),
+        VMSTATE_UINT32(AHBENR, stm32_rcc_state),
+        VMSTATE_UINT32(APB2ENR, stm32_rcc_state),
+        VMSTATE_UINT32(APB1ENR, stm32_rcc_state),
+        VMSTATE_UINT32(AHBLPENR, stm32_rcc_state),
+        VMSTATE_UINT32(APB2LPENR, stm32_rcc_state),
+        VMSTATE_UINT32(APB1LPENR, stm32_rcc_state),
+        VMSTATE_UINT32(CSR, stm32_rcc_state),
+        VMSTATE_UINT32(tick_offset_vmstate, stm32_rcc_state),
+        VMSTATE_END_OF_LIST()
+    }
 };
-
 
 
 static void stm32_rcc_class_init (ObjectClass *klass, void *data)
@@ -231,7 +273,6 @@ static void stm32_rcc_class_init (ObjectClass *klass, void *data)
     k->init   = stm32_rcc_init;
     dc->desc  = "STM32 RCC";
     dc->vmsd  = &vmstate_stm32_rcc;
-    dc->props = stm32_rcc_sysbus_properties;
 
 }
 

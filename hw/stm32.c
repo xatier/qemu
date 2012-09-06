@@ -165,6 +165,8 @@ static void stm32l152rbt6_init (ram_addr_t ram_size, const char *boot_device,
     gpio_dev[GPIO_B] = sysbus_create_varargs("stm32_gpio_B", gpio_addr[GPIO_B],
                                                                         NULL);
 
+    sysbus_create_simple("stm32_rcc", -1, NULL);
+
     qemu_irq entreeLED6 = qdev_get_gpio_in(led_dev6, 0);
     qdev_connect_gpio_out(gpio_dev[GPIO_B], 6, entreeLED6);
     qemu_irq entreeLED7 = qdev_get_gpio_in(led_dev7, 0);
